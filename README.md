@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Perruzz/Altrove/releases/latest/download/Altrove.apk"><strong>⬇ Download Altrove.apk</strong></a>
+  <a href="https://github.com/Perruzz/Altrove/releases/latest/download/Altrove.apk"><img src="docs/download.svg" width="340" alt="Download Altrove.apk"></a>
 </p>
 
 <p align="center">
