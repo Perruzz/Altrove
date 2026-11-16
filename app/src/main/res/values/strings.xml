@@ -12,9 +12,38 @@
     <string name="latitude_error">A number between −90 and 90</string>
     <string name="longitude_error">A number between −180 and 180</string>
     <string name="destination_tip">Tap the globe to pick a place, or paste a pair like “41.8902, 12.4922”.</string>
-    <string name="globe_description">The Earth, turned towards the destination. Tap it to pick a place, drag sideways to spin it.</string>
+    <string name="globe_description">The Earth, turned towards the destination. Tap it to pick a place (in area mode, to add a corner); drag sideways to spin it.</string>
     <string name="save">Save</string>
     <string name="saved">Saved</string>
+
+    <!-- Point or area -->
+    <string name="mode_point">Point</string>
+    <string name="mode_area">Area</string>
+    <string name="area_corner">Corner %1$d</string>
+    <string name="area_corner_example" translatable="false">41.890210, 12.492230</string>
+    <string name="area_remove_corner">Remove corner %1$d</string>
+    <string name="area_add_corner">Add corner</string>
+    <string name="area_spacing">Spacing</string>
+    <plurals name="area_points">
+        <item quantity="one">%1$s point</item>
+        <item quantity="other">%1$s points</item>
+    </plurals>
+    <plurals name="area_points_estimate">
+        <item quantity="one">≈ %1$s point</item>
+        <item quantity="other">≈ %1$s points</item>
+    </plurals>
+    <string name="area_spacing_note">one every %1$s m</string>
+    <string name="area_counting">Counting the points…</string>
+    <string name="area_need_corners">At least 3 corners are needed.</string>
+    <string name="area_bad_corner">Corner %1$d: write it as “latitude, longitude”.</string>
+    <string name="area_bad_spacing">Spacing: from 0.1 to 100000 m.</string>
+    <string name="area_flat">These corners don’t enclose any surface.</string>
+    <string name="area_empty">No point fits inside: try a smaller spacing.</string>
+    <string name="area_tip">Enter the corners in order around the area; you can paste them from Google Maps, even several at once. Each tap picks one of the points at random, all with the same chance.</string>
+    <string name="area_pick">Random point</string>
+    <string name="area_destination">Destination: %1$s</string>
+
+    <string name="support_coffee">Buy me a coffee</string>
 
     <!-- One-time setup -->
     <string name="setup_title">One-time setup</string>
@@ -32,7 +61,7 @@
     <!-- Session -->
     <string name="status_idle_title">Real position</string>
     <string name="status_idle_body">Tap the widget on your home screen to be at your destination for 5 minutes.</string>
-    <string name="status_idle_body_no_destination">Save a destination first.</string>
+    <string name="status_idle_body_no_destination">Choose a destination first.</string>
     <string name="status_idle_body_setup">Finish the setup above first.</string>
     <string name="status_active_title">You are elsewhere</string>
     <string name="status_active_body">At %1$s. Your real position comes back on its own.</string>

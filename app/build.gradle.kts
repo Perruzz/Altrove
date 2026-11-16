@@ -23,8 +23,8 @@ android {
         applicationId = "app.altrove"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
     }
 
     signingConfigs {
@@ -79,4 +79,6 @@ dependencies {
     // Only used to put Google's fused location provider in mock mode, so apps that read the
     // position through Play services (Google Maps, ...) stay on the chosen spot.
     implementation(libs.play.services.location)
+
+    testImplementation(libs.junit)
 }

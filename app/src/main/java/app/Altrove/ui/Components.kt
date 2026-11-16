@@ -1,6 +1,8 @@
 package app.altrove.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
@@ -20,9 +22,15 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -39,16 +47,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.altrove.ui.space.SpaceScene
 import java.util.Locale
@@ -147,16 +159,20 @@ internal fun GlowButton(
 internal fun GhostButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     color: Color = Space.Starlight,
     content: @Composable RowScope.() -> Unit,
 ) {
     OutlinedButton(
         onClick = onClick,
         modifier = modifier,
+        enabled = enabled,
         shape = CircleShape,
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = Color.White.copy(alpha = 0.06f),
             contentColor = color,
+            disabledContainerColor = Color.Transparent,
+            disabledContentColor = Color.White.copy(alpha = 0.3f),
         ),
         border = BorderStroke(1.dp, color.copy(alpha = 0.34f)),
         contentPadding = PaddingValues(horizontal = 22.dp),
@@ -219,23 +235,82 @@ internal fun CoordinateField(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = imeAction),
         keyboardActions = keyboardActions,
         shape = FieldShape,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Space.Starlight,
-            errorTextColor = Space.Starlight,
-            focusedContainerColor = Color.White.copy(alpha = 0.07f),
-            unfocusedContainerColor = Color.White.copy(alpha = 0.04f),
-            errorContainerColor = Space.Danger.copy(alpha = 0.07f),
-            cursorColor = Space.Cyan,
-            focusedBorderColor = Space.Cyan,
-            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-            focusedLabelColor = Space.Cyan,
-            unfocusedLabelColor = Space.Muted,
-            focusedSuffixColor = Space.Muted,
-            unfocusedSuffixColor = Space.Muted,
-            errorSuffixColor = Space.Muted,
-        ),
+        colors = spaceFieldColors(),
     )
+}
+
+/** Text fields on the glass: a faint fill, and cyan while typing. */
+@Composable
+internal fun spaceFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = Color.White,
+    unfocusedTextColor = Space.Starlight,
+    errorTextColor = Space.Starlight,
+    focusedContainerColor = Color.White.copy(alpha = 0.07f),
+    unfocusedContainerColor = Color.White.copy(alpha = 0.04f),
+    errorContainerColor = Space.Danger.copy(alpha = 0.07f),
+    cursorColor = Space.Cyan,
+    focusedBorderColor = Space.Cyan,
+    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+    focusedLabelColor = Space.Cyan,
+    unfocusedLabelColor = Space.Muted,
+    focusedSuffixColor = Space.Muted,
+    unfocusedSuffixColor = Space.Muted,
+    errorSuffixColor = Space.Muted,
+    focusedTrailingIconColor = Space.Muted,
+    unfocusedTrailingIconColor = Space.Muted,
+    errorTrailingIconColor = Space.Muted,
+)
+
+/**
+ * Two or more choices side by side, with a glowing pill sliding under the chosen one.
+ */
+@Composable
+internal fun ModeSwitch(
+    options: List<String>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    segment: Dp = 76.dp,
+) {
+    val offset by animateDpAsState(
+        targetValue = segment * selected,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f),
+        label = "switch",
+    )
+    Box(
+        modifier = modifier
+            .height(38.dp)
+            .width(segment * options.size)
+            .background(Color.White.copy(alpha = 0.06f), CircleShape)
+            .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape),
+    ) {
+        Box(
+            modifier = Modifier
+                // Read during layout: the pill slides without recomposing anything.
+                .offset { IntOffset(offset.roundToPx(), 0) }
+                .width(segment)
+                .fillMaxHeight()
+                .padding(3.dp)
+                .shadow(10.dp, CircleShape, clip = false, ambientColor = Space.Violet, spotColor = Space.Violet)
+                .background(Brush.horizontalGradient(listOf(Space.Violet, Color(0xFF5546E0))), CircleShape),
+        )
+        Row(modifier = Modifier.selectableGroup()) {
+            options.forEachIndexed { index, label ->
+                val chosen = index == selected
+                val color by animateColorAsState(if (chosen) Color.White else Space.Muted, label = "label")
+                Box(
+                    modifier = Modifier
+                        .width(segment)
+                        .fillMaxHeight()
+                        .clip(CircleShape)
+                        .selectable(selected = chosen, role = Role.Tab, onClick = { onSelect(index) }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = label, style = MaterialTheme.typography.labelLarge, color = color)
+                }
+            }
+        }
+    }
 }
 
 /**

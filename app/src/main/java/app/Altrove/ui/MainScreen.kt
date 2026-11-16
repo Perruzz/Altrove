@@ -14,6 +14,9 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,12 +47,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -62,6 +69,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
@@ -77,6 +85,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.altrove.AltroveWidgetProvider
+import app.altrove.AreaGrid
+import app.altrove.AreaInput
 import app.altrove.Coordinates
 import app.altrove.MockLocationService
 import app.altrove.Prefs
@@ -86,15 +96,22 @@ import app.altrove.Setup
 import app.altrove.ui.space.Globe
 import app.altrove.ui.space.SpaceBackground
 import app.altrove.ui.space.SpaceScene
-import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
 
 private const val MAX_FIELD_LENGTH = 20
+private const val MAX_CORNER_LENGTH = 40
+private const val KO_FI = "https://ko-fi.com/perruzz"
+
+/** The grid computed for a given set of corners and spacing (null if they make no area). */
+private data class AreaResult(val key: Pair<List<Coordinates>, Double>?, val grid: AreaGrid?)
 
 /**
  * The one screen of the app: a sky, the Earth turned towards the destination, and under it
- * the two fields that say where that is.
+ * the destination itself: a point typed in two fields, or an area to draw a point from.
  */
 @Composable
 fun MainScreen() {
@@ -126,6 +143,54 @@ fun MainScreen() {
     // What is in the fields, when it is a valid place that has not been saved yet.
     val draft = typed?.takeIf { it != destination }
 
+    // --- The area mode: corners, spacing, and the grid of points laid over them -------------
+
+    var areaMode by rememberSaveable { mutableStateOf(Prefs.areaMode(context)) }
+    val corners = rememberSaveable(saver = listSaver(save = { it.toList() }, restore = { it.toMutableStateList() })) {
+        Prefs.areaCorners(context).toMutableStateList()
+    }
+    var spacing by rememberSaveable { mutableStateOf(Prefs.areaSpacing(context)) }
+    // While a point is being drawn: the candidate on show, and the steps so far (they spin the die).
+    var rolling by remember { mutableStateOf<Coordinates?>(null) }
+    var rollTurns by remember { mutableIntStateOf(0) }
+
+    val parsedCorners = corners.map { AreaInput.parseCorner(it) }
+    val invalidCorners = corners.indices.filter { corners[it].isNotBlank() && parsedCorners[it] == null }.toSet()
+    val validCorners = parsedCorners.filterNotNull()
+    val spacingMeters = AreaInput.parseSpacing(spacing)
+    val areaInputProblem = when {
+        invalidCorners.isNotEmpty() -> stringResource(R.string.area_bad_corner, invalidCorners.min() + 1)
+        validCorners.size < 3 -> stringResource(R.string.area_need_corners)
+        spacingMeters == null -> stringResource(R.string.area_bad_spacing)
+        else -> null
+    }
+    val areaKey = if (areaInputProblem == null && spacingMeters != null) validCorners to spacingMeters else null
+    // Counting the points can take a moment for large areas: off the main thread, and only once
+    // the typing pauses.
+    val areaResult by produceState(AreaResult(null, null), areaKey) {
+        val key = areaKey ?: return@produceState
+        delay(150)
+        value = AreaResult(key, withContext(Dispatchers.Default) { AreaGrid.of(key.first, key.second) })
+    }
+    val grid = areaResult.grid?.takeIf { areaResult.key == areaKey }
+    val areaSummary = when {
+        areaInputProblem != null -> AreaSummary.Problem(areaInputProblem)
+        // Still counting: keep showing the previous count rather than flicker.
+        areaResult.key != areaKey -> areaResult.grid?.takeIf { it.count > 0 }
+            ?.let { AreaSummary.Points(it.count, it.countIsExact, spacingMeters ?: it.spacingMeters) }
+            ?: AreaSummary.Counting
+        grid == null -> AreaSummary.Problem(stringResource(R.string.area_flat))
+        grid.count == 0L -> AreaSummary.Problem(stringResource(R.string.area_empty))
+        else -> AreaSummary.Points(grid.count, grid.countIsExact, grid.spacingMeters)
+    }
+
+    // The area is kept as typed, valid or not, so that it is there the next time.
+    val cornersSnapshot = corners.toList()
+    LaunchedEffect(cornersSnapshot, spacing) {
+        delay(400)
+        Prefs.saveArea(context, cornersSnapshot, spacing)
+    }
+
     // Back from Settings or from the launcher: re-read whatever may have changed out there.
     LifecycleResumeEffect(Unit) {
         isMockApp = Setup.isMockLocationApp(context)
@@ -152,8 +217,15 @@ fun MainScreen() {
     val active = session != null
     val mood by animateFloatAsState(if (active) 1f else 0f, tween(900), label = "mood")
 
-    // The globe looks at what is being typed; failing that, at where you are (or will be).
-    SideEffect { scene.globe.target = draft ?: session?.destination ?: destination }
+    // The globe looks at what is being typed (or drawn); failing that, at where you are, or
+    // will be, or at the area.
+    SideEffect {
+        scene.globe.target = if (areaMode) {
+            rolling ?: session?.destination ?: areaResult.grid?.center ?: destination
+        } else {
+            draft ?: session?.destination ?: destination
+        }
+    }
 
     var introPlayed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(scene) {
@@ -193,16 +265,12 @@ fun MainScreen() {
         justSaved = false
     }
 
-    fun save() {
-        val place = draft ?: return
-        val cleanLatitude = Coordinates.normalize(latitude)
-        val cleanLongitude = Coordinates.normalize(longitude)
-        Prefs.saveDestination(context, cleanLatitude, cleanLongitude)
-        latitude = cleanLatitude
-        longitude = cleanLongitude
+    /** Makes [place] the destination, with the save flourish on the globe. */
+    fun commit(place: Coordinates, latitudeText: String, longitudeText: String) {
+        Prefs.saveDestination(context, latitudeText, longitudeText)
+        latitude = latitudeText
+        longitude = longitudeText
         destination = place
-        justSaved = true
-        focusManager.clearFocus()
         if (Session.isActive) {
             // Move the running session too, and fix the text in its notification.
             Session.retarget(place)
@@ -211,6 +279,48 @@ fun MainScreen() {
         AltroveWidgetProvider.refresh(context)
         haptics.performHapticFeedback(HapticFeedbackType.Confirm)
         scope.launch { scene.playSave() }
+    }
+
+    fun save() {
+        val place = draft ?: return
+        commit(place, Coordinates.normalize(latitude), Coordinates.normalize(longitude))
+        justSaved = true
+        focusManager.clearFocus()
+    }
+
+    /** Draws a point of the area, like a slot machine: a few quick candidates, then the one. */
+    fun pickRandom() {
+        val area = grid ?: return
+        if (rolling != null) return
+        focusManager.clearFocus()
+        scope.launch {
+            if (!scene.calm) {
+                for (step in 0 until 9) {
+                    rolling = area.random() ?: break
+                    rollTurns++
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    delay(45L + step * step * 6L)
+                }
+            }
+            val pick = area.random()
+            rollTurns++
+            rolling = null
+            if (pick != null) commit(pick, AreaInput.format(pick.latitude), AreaInput.format(pick.longitude))
+        }
+    }
+
+    fun editCorner(index: Int, text: String) {
+        val previous = corners.getOrNull(index) ?: return
+        val pasted = AreaInput.findPairs(text)
+        if (text.length - previous.length > 1 && pasted.size >= 2) {
+            // Several corners pasted at once: one per row, adding rows as needed.
+            pasted.forEachIndexed { offset, pair ->
+                val row = index + offset
+                if (row < corners.size) corners[row] = pair else if (corners.size < MAX_CORNERS) corners.add(pair)
+            }
+        } else {
+            corners[index] = text.filter { it.isDigit() || it in ".,;+-− " }.take(MAX_CORNER_LENGTH)
+        }
     }
 
     // --- Layout ---------------------------------------------------------------------------
@@ -257,13 +367,24 @@ fun MainScreen() {
                     Globe(
                         scene = scene,
                         destination = destination,
-                        draft = draft,
+                        draft = if (areaMode) rolling else draft,
+                        area = validCorners.takeIf { areaMode && it.size >= 3 },
                         session = session,
                         active = { mood },
                         onPick = { place ->
-                            latitude = String.format(Locale.US, "%.4f", place.latitude)
-                            longitude = String.format(Locale.US, "%.4f", place.longitude)
-                            justSaved = false
+                            if (areaMode) {
+                                // In area mode a tap adds a corner: handy to sketch a large area.
+                                val pair = String.format(Locale.US, "%.4f, %.4f", place.latitude, place.longitude)
+                                val blank = corners.indexOfFirst { it.isBlank() }
+                                when {
+                                    blank >= 0 -> corners[blank] = pair
+                                    corners.size < MAX_CORNERS -> corners.add(pair)
+                                }
+                            } else {
+                                latitude = String.format(Locale.US, "%.4f", place.latitude)
+                                longitude = String.format(Locale.US, "%.4f", place.longitude)
+                                justSaved = false
+                            }
                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         },
                         modifier = Modifier
@@ -294,15 +415,43 @@ fun MainScreen() {
                 }
 
                 DestinationCard(
-                    latitude = latitude,
-                    longitude = longitude,
-                    onLatitudeChange = { text -> edit(text) { latitude = it } },
-                    onLongitudeChange = { text -> edit(text) { longitude = it } },
-                    parsedLatitude = parsedLatitude,
-                    parsedLongitude = parsedLongitude,
-                    canSave = draft != null,
-                    justSaved = justSaved,
-                    onSave = { save() },
+                    areaMode = areaMode,
+                    onModeChange = { area ->
+                        areaMode = area
+                        Prefs.setAreaMode(context, area)
+                        focusManager.clearFocus()
+                    },
+                    point = {
+                        PointEditor(
+                            latitude = latitude,
+                            longitude = longitude,
+                            onLatitudeChange = { text -> edit(text) { latitude = it } },
+                            onLongitudeChange = { text -> edit(text) { longitude = it } },
+                            parsedLatitude = parsedLatitude,
+                            parsedLongitude = parsedLongitude,
+                            canSave = draft != null,
+                            justSaved = justSaved,
+                            onSave = { save() },
+                        )
+                    },
+                    area = {
+                        AreaEditor(
+                            corners = corners,
+                            invalidCorners = invalidCorners,
+                            onCornerChange = { index, text -> editCorner(index, text) },
+                            onAddCorner = { if (corners.size < MAX_CORNERS) corners.add("") },
+                            onRemoveCorner = { index -> if (corners.size > 3) corners.removeAt(index) },
+                            spacing = spacing,
+                            spacingValid = spacingMeters != null,
+                            onSpacingChange = { spacing = it },
+                            summary = areaSummary,
+                            canPick = grid != null && grid.count > 0,
+                            rolling = rolling != null,
+                            rollTurns = rollTurns,
+                            shown = rolling ?: destination,
+                            onPick = { pickRandom() },
+                        )
+                    },
                     modifier = Modifier.entrance(scene, order = 2),
                 )
 
@@ -352,6 +501,26 @@ fun MainScreen() {
                         .padding(horizontal = 4.dp)
                         .entrance(scene, order = 4),
                 )
+
+                // Opens Ko-fi in the browser: the app itself still never goes online.
+                val uriHandler = LocalUriHandler.current
+                GhostButton(
+                    onClick = { runCatching { uriHandler.openUri(KO_FI) } },
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(bottom = 8.dp)
+                        .height(46.dp)
+                        .entrance(scene, order = 5),
+                    color = Space.Gold,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_coffee),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.support_coffee))
+                }
             }
         }
     }
@@ -502,8 +671,46 @@ private fun SetupCard(
     }
 }
 
+/** The destination: a point or an area, chosen with the switch in the corner. */
 @Composable
 private fun DestinationCard(
+    areaMode: Boolean,
+    onModeChange: (Boolean) -> Unit,
+    point: @Composable () -> Unit,
+    area: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    GlassCard(modifier = modifier.animateContentSize()) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.destination_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                modifier = Modifier.weight(1f),
+            )
+            ModeSwitch(
+                options = listOf(stringResource(R.string.mode_point), stringResource(R.string.mode_area)),
+                selected = if (areaMode) 1 else 0,
+                onSelect = { onModeChange(it == 1) },
+            )
+        }
+        AnimatedContent(
+            targetState = areaMode,
+            transitionSpec = {
+                (fadeIn(tween(220, delayMillis = 80)) togetherWith fadeOut(tween(80))).using(null)
+            },
+            label = "mode",
+        ) { isArea ->
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (isArea) area() else point()
+            }
+        }
+    }
+}
+
+/** A single point: latitude and longitude, typed or pasted, and saved with the button. */
+@Composable
+private fun PointEditor(
     latitude: String,
     longitude: String,
     onLatitudeChange: (String) -> Unit,
@@ -513,71 +720,62 @@ private fun DestinationCard(
     canSave: Boolean,
     justSaved: Boolean,
     onSave: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val focusManager = LocalFocusManager.current
-    GlassCard(modifier = modifier) {
-        Text(
-            text = stringResource(R.string.destination_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.White,
-        )
+    CoordinateField(
+        value = latitude,
+        onValueChange = onLatitudeChange,
+        label = stringResource(R.string.latitude),
+        example = stringResource(R.string.latitude_example),
+        error = stringResource(R.string.latitude_error)
+            .takeIf { latitude.isNotBlank() && parsedLatitude == null },
+        hemisphere = parsedLatitude?.let { if (it < 0) "S" else "N" },
+        imeAction = ImeAction.Next,
+        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+    )
+    CoordinateField(
+        value = longitude,
+        onValueChange = onLongitudeChange,
+        label = stringResource(R.string.longitude),
+        example = stringResource(R.string.longitude_example),
+        error = stringResource(R.string.longitude_error)
+            .takeIf { longitude.isNotBlank() && parsedLongitude == null },
+        hemisphere = parsedLongitude?.let { if (it < 0) "W" else "E" },
+        imeAction = ImeAction.Done,
+        keyboardActions = KeyboardActions(
+            onDone = { if (canSave) onSave() else focusManager.clearFocus() },
+        ),
+    )
 
-        CoordinateField(
-            value = latitude,
-            onValueChange = onLatitudeChange,
-            label = stringResource(R.string.latitude),
-            example = stringResource(R.string.latitude_example),
-            error = stringResource(R.string.latitude_error)
-                .takeIf { latitude.isNotBlank() && parsedLatitude == null },
-            hemisphere = parsedLatitude?.let { if (it < 0) "S" else "N" },
-            imeAction = ImeAction.Next,
-            keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
-        )
-        CoordinateField(
-            value = longitude,
-            onValueChange = onLongitudeChange,
-            label = stringResource(R.string.longitude),
-            example = stringResource(R.string.longitude_example),
-            error = stringResource(R.string.longitude_error)
-                .takeIf { longitude.isNotBlank() && parsedLongitude == null },
-            hemisphere = parsedLongitude?.let { if (it < 0) "W" else "E" },
-            imeAction = ImeAction.Done,
-            keyboardActions = KeyboardActions(
-                onDone = { if (canSave) onSave() else focusManager.clearFocus() },
-            ),
-        )
+    Text(
+        text = stringResource(R.string.destination_tip),
+        style = MaterialTheme.typography.bodySmall,
+        color = Space.Muted,
+    )
 
-        Text(
-            text = stringResource(R.string.destination_tip),
-            style = MaterialTheme.typography.bodySmall,
-            color = Space.Muted,
-        )
-
-        GlowButton(
-            onClick = onSave,
-            // Stays lit for a moment after saving, to show the "Saved" confirmation.
-            enabled = canSave || justSaved,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            colors = if (justSaved) listOf(Color(0xFF3CCB9B), Color(0xFF1FA6B8)) else listOf(Space.Violet, Color(0xFF5546E0)),
-        ) {
-            AnimatedContent(targetState = justSaved, label = "save") { saved ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (saved) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_check),
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Text(
-                        text = stringResource(if (saved) R.string.saved else R.string.save),
-                        fontWeight = FontWeight.SemiBold,
+    GlowButton(
+        onClick = onSave,
+        // Stays lit for a moment after saving, to show the "Saved" confirmation.
+        enabled = canSave || justSaved,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        colors = if (justSaved) listOf(Color(0xFF3CCB9B), Color(0xFF1FA6B8)) else listOf(Space.Violet, Color(0xFF5546E0)),
+    ) {
+        AnimatedContent(targetState = justSaved, label = "save") { saved ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (saved) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_check),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
                     )
+                    Spacer(Modifier.width(8.dp))
                 }
+                Text(
+                    text = stringResource(if (saved) R.string.saved else R.string.save),
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }

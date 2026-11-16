@@ -14,7 +14,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -38,6 +40,7 @@ import kotlin.math.PI
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -50,7 +53,8 @@ private val GlobeMargin = 30.dp
  * about to be.
  *
  * - [destination] is marked by a pulsing beacon; [draft] (coordinates typed or picked but not
- *   saved yet) by a turning reticle.
+ *   saved yet) by a turning reticle; an [area] by its outline, or a ring where it is too small
+ *   to draw.
  * - At rest a little satellite circles it; during a [session] a ring around it runs down
  *   with the five minutes.
  * - Dragging sideways spins it, and a tap picks the place under the finger ([onPick]).
@@ -62,6 +66,7 @@ internal fun Globe(
     scene: SpaceScene,
     destination: Coordinates?,
     draft: Coordinates?,
+    area: List<Coordinates>?,
     session: Session.Active?,
     active: () -> Float,
     onPick: (Coordinates) -> Unit,
@@ -96,7 +101,7 @@ internal fun Globe(
             },
         contentDescription = stringResource(R.string.globe_description),
     ) {
-        painter.draw(this, scene, destination, draft, session, active(), margin)
+        painter.draw(this, scene, destination, draft, area, session, active(), margin)
     }
 }
 
@@ -128,6 +133,7 @@ private class GlobePainter(private val dots: EarthDots) {
 
     private val graticule = buildGraticule()
     private val lines = FloatArray(graticule.size / 6 * 4)
+    private val areaPath = Path()
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -157,6 +163,7 @@ private class GlobePainter(private val dots: EarthDots) {
         scene: SpaceScene,
         destination: Coordinates?,
         draft: Coordinates?,
+        area: List<Coordinates>?,
         session: Session.Active?,
         mood: Float,
         margin: Float,
@@ -184,6 +191,7 @@ private class GlobePainter(private val dots: EarthDots) {
         drawLand(center, radius, land, time, scene.calm)
         drawCircle(rim!!, radius, center)
 
+        if (area != null) drawArea(area, center, radius)
         if (launch < 1f) drawLaunch(center, radius, launch, glow)
         if (destination != null && project(destination, center, radius)) {
             drawBeacon(time, save, mood, scene.calm)
@@ -315,6 +323,40 @@ private class GlobePainter(private val dots: EarthDots) {
             paint.color = color.copy(alpha = 0.13f).toArgb()
             paint.strokeWidth = 1.dp.toPx() * 0.8f
             canvas.nativeCanvas.drawLines(lines, 0, count, paint)
+        }
+    }
+
+    /**
+     * An area: its outline when it is big enough to see on the globe, otherwise a ring around
+     * where it is. Not drawn while any of it is on the far side.
+     */
+    private fun DrawScope.drawArea(area: List<Coordinates>, center: Offset, radius: Float) {
+        val unit = 1.dp.toPx()
+        areaPath.reset()
+        var minX = Float.MAX_VALUE
+        var maxX = -Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxY = -Float.MAX_VALUE
+        var sumX = 0f
+        var sumY = 0f
+        for ((index, corner) in area.withIndex()) {
+            if (!project(corner, center, radius)) return
+            if (index == 0) areaPath.moveTo(px, py) else areaPath.lineTo(px, py)
+            minX = min(minX, px)
+            maxX = max(maxX, px)
+            minY = min(minY, py)
+            maxY = max(maxY, py)
+            sumX += px
+            sumY += py
+        }
+        areaPath.close()
+        if (max(maxX - minX, maxY - minY) < unit * 8f) {
+            val at = Offset(sumX / area.size, sumY / area.size)
+            drawCircle(Space.Cyan, unit * 12f, at, alpha = 0.14f)
+            drawCircle(Space.Cyan, unit * 12f, at, alpha = 0.8f, style = Stroke(unit * 1.4f))
+        } else {
+            drawPath(areaPath, Space.Cyan, alpha = 0.16f)
+            drawPath(areaPath, Space.Cyan, alpha = 0.85f, style = Stroke(unit * 1.5f, join = StrokeJoin.Round))
         }
     }
 

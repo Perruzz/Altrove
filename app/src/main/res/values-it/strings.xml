@@ -9,9 +9,39 @@
     <string name="latitude_error">Un numero tra −90 e 90</string>
     <string name="longitude_error">Un numero tra −180 e 180</string>
     <string name="destination_tip">Tocca il globo per scegliere un punto, oppure incolla una coppia come «41.8902, 12.4922».</string>
-    <string name="globe_description">La Terra, rivolta verso la destinazione. Toccala per scegliere un punto, trascina di lato per farla ruotare.</string>
+    <string name="globe_description">La Terra, rivolta verso la destinazione. Toccala per scegliere un punto (in modalità Area, per aggiungere un vertice); trascina di lato per farla ruotare.</string>
     <string name="save">Salva</string>
     <string name="saved">Salvato</string>
+
+    <!-- Point or area -->
+    <string name="mode_point">Punto</string>
+    <string name="mode_area">Area</string>
+    <string name="area_corner">Vertice %1$d</string>
+    <string name="area_remove_corner">Rimuovi il vertice %1$d</string>
+    <string name="area_add_corner">Aggiungi vertice</string>
+    <string name="area_spacing">Passo</string>
+    <plurals name="area_points">
+        <item quantity="one">%1$s punto</item>
+        <item quantity="many">%1$s punti</item>
+        <item quantity="other">%1$s punti</item>
+    </plurals>
+    <plurals name="area_points_estimate">
+        <item quantity="one">≈ %1$s punto</item>
+        <item quantity="many">≈ %1$s punti</item>
+        <item quantity="other">≈ %1$s punti</item>
+    </plurals>
+    <string name="area_spacing_note">uno ogni %1$s m</string>
+    <string name="area_counting">Conto i punti…</string>
+    <string name="area_need_corners">Servono almeno 3 vertici.</string>
+    <string name="area_bad_corner">Vertice %1$d: scrivilo come «latitudine, longitudine».</string>
+    <string name="area_bad_spacing">Passo: da 0,1 a 100000 m.</string>
+    <string name="area_flat">Questi vertici non racchiudono nessuna superficie.</string>
+    <string name="area_empty">Dentro non ci sta nessun punto: prova un passo più piccolo.</string>
+    <string name="area_tip">Inserisci i vertici in ordine lungo il perimetro; puoi incollarli da Google Maps, anche più di uno insieme. Ogni tocco sceglie a caso uno dei punti, tutti con la stessa probabilità.</string>
+    <string name="area_pick">Punto a caso</string>
+    <string name="area_destination">Destinazione: %1$s</string>
+
+    <string name="support_coffee">Offrimi un caffè</string>
 
     <!-- One-time setup -->
     <string name="setup_title">Configurazione iniziale</string>
@@ -29,7 +59,7 @@
     <!-- Session -->
     <string name="status_idle_title">Posizione reale</string>
     <string name="status_idle_body">Tocca il widget nella schermata Home per trovarti a destinazione per 5 minuti.</string>
-    <string name="status_idle_body_no_destination">Prima salva una destinazione.</string>
+    <string name="status_idle_body_no_destination">Prima scegli una destinazione.</string>
     <string name="status_idle_body_setup">Prima completa la configurazione qui sopra.</string>
     <string name="status_active_title">Sei altrove</string>
     <string name="status_active_body">A %1$s. La posizione reale torna da sola.</string>

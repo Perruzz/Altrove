@@ -11,6 +11,9 @@ object Prefs {
     private const val KEY_LONGITUDE = "longitude"
     private const val KEY_SESSION_RUNNING = "session_running"
     private const val KEY_OPTIONAL_PERMISSIONS_HANDLED = "optional_permissions_handled"
+    private const val KEY_AREA_MODE = "area_mode"
+    private const val KEY_AREA_CORNERS = "area_corners"
+    private const val KEY_AREA_SPACING = "area_spacing"
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -50,5 +53,28 @@ object Prefs {
 
     fun setOptionalPermissionsHandled(context: Context) {
         prefs(context).edit { putBoolean(KEY_OPTIONAL_PERMISSIONS_HANDLED, true) }
+    }
+
+    /** True when the destination is drawn at random from an area rather than typed. */
+    fun areaMode(context: Context): Boolean = prefs(context).getBoolean(KEY_AREA_MODE, false)
+
+    fun setAreaMode(context: Context, area: Boolean) {
+        prefs(context).edit { putBoolean(KEY_AREA_MODE, area) }
+    }
+
+    /** The corners of the area as typed, one per row: four empty rows the first time. */
+    fun areaCorners(context: Context): List<String> {
+        val rows = prefs(context).getString(KEY_AREA_CORNERS, null)?.split('\n') ?: return List(4) { "" }
+        return rows + List((3 - rows.size).coerceAtLeast(0)) { "" }
+    }
+
+    /** The spacing of the grid in metres, as typed: one metre by default. */
+    fun areaSpacing(context: Context): String = prefs(context).getString(KEY_AREA_SPACING, null) ?: "1"
+
+    fun saveArea(context: Context, corners: List<String>, spacing: String) {
+        prefs(context).edit {
+            putString(KEY_AREA_CORNERS, corners.joinToString("\n"))
+            putString(KEY_AREA_SPACING, spacing)
+        }
     }
 }
