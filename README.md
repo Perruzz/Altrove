@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://ko-fi.com/perruzz"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Buy me a coffee on Ko-fi"></a>
+  <a href="https://buymeacoffee.com/peruzz"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" height="50" alt="Buy Me a Coffee"></a>
 </p>
 
 <p align="center">
@@ -143,8 +143,8 @@ root.
   millimetre over a few kilometres. A random point is drawn by rejection sampling over the
   grid: uniform by construction, and checked with a chi-square test in the unit tests.
 
-The app has no internet permission: it cannot send anything anywhere (the Ko-fi button opens
-your browser). The globe is drawn on the phone from a small map of the continents built into
+The app has no internet permission: it cannot send anything anywhere (the Buy Me a Coffee
+button opens your browser). The globe is drawn on the phone from a small map of the continents built into
 the app.
 
 ## Good to know
@@ -161,7 +161,7 @@ the app.
 
 Altrove is free and has no ads. If it is useful to you, you can buy me a coffee:
 
-<a href="https://ko-fi.com/perruzz"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Buy me a coffee on Ko-fi"></a>
+<a href="https://buymeacoffee.com/peruzz"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" height="50" alt="Buy Me a Coffee"></a>
 
 ## Build from source
 

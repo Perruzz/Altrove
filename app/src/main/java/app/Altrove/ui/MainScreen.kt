@@ -104,7 +104,7 @@ import java.util.Locale
 
 private const val MAX_FIELD_LENGTH = 20
 private const val MAX_CORNER_LENGTH = 40
-private const val KO_FI = "https://ko-fi.com/perruzz"
+private const val BUY_ME_A_COFFEE = "https://buymeacoffee.com/peruzz"
 
 /** The grid computed for a given set of corners and spacing (null if they make no area). */
 private data class AreaResult(val key: Pair<List<Coordinates>, Double>?, val grid: AreaGrid?)
@@ -502,10 +502,10 @@ fun MainScreen() {
                         .entrance(scene, order = 4),
                 )
 
-                // Opens Ko-fi in the browser: the app itself still never goes online.
+                // Opens Buy Me a Coffee in the browser: the app itself still never goes online.
                 val uriHandler = LocalUriHandler.current
                 GhostButton(
-                    onClick = { runCatching { uriHandler.openUri(KO_FI) } },
+                    onClick = { runCatching { uriHandler.openUri(BUY_ME_A_COFFEE) } },
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .padding(bottom = 8.dp)
