@@ -43,6 +43,17 @@
 
     <string name="support_coffee">Offrimi un caffè</string>
 
+    <!-- Settings -->
+    <string name="settings_title">Impostazioni</string>
+    <string name="settings_close">Chiudi</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_language">Lingua</string>
+    <string name="settings_system">Sistema</string>
+    <string name="theme_light">Chiaro</string>
+    <string name="theme_dark">Scuro</string>
+    <string name="settings_support">Altrove è gratuita e open source. Se ti è utile, puoi offrirmi un caffè.</string>
+    <string name="settings_version">Altrove %1$s · licenza MIT</string>
+
     <!-- One-time setup -->
     <string name="setup_title">Configurazione iniziale</string>
     <string name="setup_mock_body">Android permette di spostare la posizione solo all’app scelta come «app di posizione fittizia». Apri le Opzioni sviluppatore e seleziona Altrove.</string>

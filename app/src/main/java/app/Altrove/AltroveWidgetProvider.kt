@@ -62,6 +62,7 @@ class AltroveWidgetProvider : AppWidgetProvider() {
         private fun component(context: Context) = ComponentName(context, AltroveWidgetProvider::class.java)
 
         private fun render(context: Context): RemoteViews {
+            val localized = context.localized()
             val session = Session.active.value
             val destination = Prefs.destination(context)
             return when {
@@ -71,16 +72,16 @@ class AltroveWidgetProvider : AppWidgetProvider() {
                     setChronometer(R.id.widget_countdown, session.endElapsedRealtime, null, true)
                     setTextViewText(R.id.widget_subtitle, session.destination.formatStacked())
                     setContentDescription(
-                        android.R.id.background, context.getString(R.string.widget_active_description),
+                        android.R.id.background, localized.getString(R.string.widget_active_description),
                     )
                     setOnClickPendingIntent(android.R.id.background, toggle(context))
                 }
 
                 destination == null || !Setup.isMockLocationApp(context) ->
                     RemoteViews(context.packageName, R.layout.widget_idle).apply {
-                        setTextViewText(R.id.widget_subtitle, context.getString(R.string.widget_setup))
+                        setTextViewText(R.id.widget_subtitle, localized.getString(R.string.widget_setup))
                         setContentDescription(
-                            android.R.id.background, context.getString(R.string.widget_setup_description),
+                            android.R.id.background, localized.getString(R.string.widget_setup_description),
                         )
                         setOnClickPendingIntent(android.R.id.background, openApp(context))
                     }
@@ -89,7 +90,7 @@ class AltroveWidgetProvider : AppWidgetProvider() {
                     setTextViewText(R.id.widget_subtitle, destination.formatStacked())
                     setContentDescription(
                         android.R.id.background,
-                        context.getString(R.string.widget_idle_description, destination.format(4)),
+                        localized.getString(R.string.widget_idle_description, destination.format(4)),
                     )
                     setOnClickPendingIntent(android.R.id.background, toggle(context))
                 }

@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The night sky of the app and of its widget. Space looks the same in light and dark theme,
-    so there are no -night or -v31 variants of these colours.
+    The widget is a patch of night sky whatever the theme, so its colours have no -night or
+    -v31 variants. Only the window background follows the phone (values-night).
 -->
 <resources>
-    <!-- Window and splash background, under the Compose sky. -->
-    <color name="space_background">#070718</color>
+    <!-- Window and splash background, under the Compose sky: white space by day (night: values-night). -->
+    <color name="space_background">#F6F4FF</color>
+    <!-- The two skies by name, for the launch splash chosen in the app (see MainActivity). -->
+    <color name="space_day">#F6F4FF</color>
+    <color name="space_night">#070718</color>
 
     <!-- Widget at rest: deep indigo with a violet glow in one corner. -->
     <color name="widget_idle_top">#241D66</color>

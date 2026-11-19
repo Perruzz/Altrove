@@ -10,6 +10,18 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 
+    <!--
+        The two skies as window themes. From Android 13 the app hands one of them to the launch
+        splash, so that it opens in the theme chosen in the app rather than the phone's.
+    -->
+    <style name="Theme.Altrove.Day" parent="Theme.Altrove">
+        <item name="android:windowBackground">@color/space_day</item>
+    </style>
+
+    <style name="Theme.Altrove.Night" parent="Theme.Altrove">
+        <item name="android:windowBackground">@color/space_night</item>
+    </style>
+
     <style name="Widget.Altrove.Title" parent="android:Widget.TextView">
         <item name="android:ellipsize">end</item>
         <item name="android:fontFamily">google-sans-medium</item>

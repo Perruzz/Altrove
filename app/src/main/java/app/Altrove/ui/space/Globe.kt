@@ -35,7 +35,9 @@ import androidx.compose.ui.unit.dp
 import app.altrove.Coordinates
 import app.altrove.R
 import app.altrove.Session
-import app.altrove.ui.Space
+import app.altrove.ui.LocalSpace
+import app.altrove.ui.NightSpace
+import app.altrove.ui.SpacePalette
 import kotlin.math.PI
 import kotlin.math.asin
 import kotlin.math.atan2
@@ -73,6 +75,7 @@ internal fun Globe(
     modifier: Modifier = Modifier,
 ) {
     val painter = remember { GlobePainter(EarthDots.build()) }
+    val palette = LocalSpace.current
     val pick by rememberUpdatedState(onPick)
     val margin = with(LocalDensity.current) { GlobeMargin.toPx() }
 
@@ -101,7 +104,7 @@ internal fun Globe(
             },
         contentDescription = stringResource(R.string.globe_description),
     ) {
-        painter.draw(this, scene, destination, draft, area, session, active(), margin)
+        painter.draw(this, scene, palette, destination, draft, area, session, active(), margin)
     }
 }
 
@@ -135,6 +138,10 @@ private class GlobePainter(private val dots: EarthDots) {
     private val lines = FloatArray(graticule.size / 6 * 4)
     private val areaPath = Path()
 
+    /** The theme of the frame being drawn. */
+    private var palette: SpacePalette = NightSpace
+    private var cachedPalette: SpacePalette? = null
+
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
@@ -161,6 +168,7 @@ private class GlobePainter(private val dots: EarthDots) {
     fun draw(
         scope: DrawScope,
         scene: SpaceScene,
+        palette: SpacePalette,
         destination: Coordinates?,
         draft: Coordinates?,
         area: List<Coordinates>?,
@@ -176,8 +184,9 @@ private class GlobePainter(private val dots: EarthDots) {
         if (baseRadius <= 0f) return@with
         // The sphere swells for an instant when the jump starts.
         val radius = baseRadius * (1f + 0.05f * swell(launch))
-        val glow = lerp(Space.Violet, Space.Magenta, mood)
-        val land = lerp(Space.Lavender, Color(0xFFFFE4F2), mood)
+        this@GlobePainter.palette = palette
+        val glow = lerp(palette.globeGlow, palette.globeGlowActive, mood)
+        val land = lerp(palette.land, palette.landActive, mood)
         prepare(center, radius, mood, glow)
         aim(scene.globe)
 
@@ -203,7 +212,8 @@ private class GlobePainter(private val dots: EarthDots) {
     }
 
     private fun prepare(center: Offset, radius: Float, mood: Float, glow: Color) {
-        if (radius == cachedRadius && mood == cachedMood && center == cachedCenter) return
+        if (radius == cachedRadius && mood == cachedMood && center == cachedCenter && palette === cachedPalette) return
+        cachedPalette = palette
         cachedRadius = radius
         cachedMood = mood
         cachedCenter = center
@@ -215,7 +225,7 @@ private class GlobePainter(private val dots: EarthDots) {
             radius = radius * HALO,
         )
         body = Brush.radialGradient(
-            listOf(Color(0xFF26266E), Color(0xFF10103A), Color(0xFF070720)),
+            palette.globeBody,
             center = Offset(center.x - radius * 0.38f, center.y - radius * 0.42f),
             radius = radius * 1.7f,
         )
@@ -226,7 +236,7 @@ private class GlobePainter(private val dots: EarthDots) {
             center = center,
             radius = radius,
         )
-        ring = Brush.sweepGradient(listOf(Space.Gold, Space.Magenta, Space.Violet, Space.Gold), center)
+        ring = Brush.sweepGradient(listOf(palette.amber, palette.magenta, palette.violet, palette.amber), center)
     }
 
     private fun aim(motion: GlobeMotion) {
@@ -297,7 +307,7 @@ private class GlobePainter(private val dots: EarthDots) {
             paint.color = color.toArgb()
             paint.strokeWidth = unit * 2.05f
             native.drawPoints(near, 0, n, paint)
-            paint.color = Color.White.toArgb()
+            paint.color = palette.landSpark.toArgb()
             paint.strokeWidth = unit * 2.6f
             native.drawPoints(lights, 0, l, paint)
         }
@@ -320,7 +330,7 @@ private class GlobePainter(private val dots: EarthDots) {
             i += 6
         }
         drawIntoCanvas { canvas ->
-            paint.color = color.copy(alpha = 0.13f).toArgb()
+            paint.color = color.copy(alpha = palette.graticuleStrength).toArgb()
             paint.strokeWidth = 1.dp.toPx() * 0.8f
             canvas.nativeCanvas.drawLines(lines, 0, count, paint)
         }
@@ -352,11 +362,11 @@ private class GlobePainter(private val dots: EarthDots) {
         areaPath.close()
         if (max(maxX - minX, maxY - minY) < unit * 8f) {
             val at = Offset(sumX / area.size, sumY / area.size)
-            drawCircle(Space.Cyan, unit * 12f, at, alpha = 0.14f)
-            drawCircle(Space.Cyan, unit * 12f, at, alpha = 0.8f, style = Stroke(unit * 1.4f))
+            drawCircle(palette.cyan, unit * 12f, at, alpha = 0.14f)
+            drawCircle(palette.cyan, unit * 12f, at, alpha = 0.8f, style = Stroke(unit * 1.4f))
         } else {
-            drawPath(areaPath, Space.Cyan, alpha = 0.16f)
-            drawPath(areaPath, Space.Cyan, alpha = 0.85f, style = Stroke(unit * 1.5f, join = StrokeJoin.Round))
+            drawPath(areaPath, palette.cyan, alpha = 0.16f)
+            drawPath(areaPath, palette.cyan, alpha = 0.85f, style = Stroke(unit * 1.5f, join = StrokeJoin.Round))
         }
     }
 
@@ -365,7 +375,7 @@ private class GlobePainter(private val dots: EarthDots) {
         val at = Offset(px, py)
         val facing = ((depth - 0.04f) / 0.3f).coerceIn(0f, 1f)
         val unit = 1.dp.toPx()
-        val color = lerp(Space.Gold, Color.White, 0.25f)
+        val color = palette.beacon
         if (!calm) {
             val pace = 0.5f + 0.35f * mood
             for (k in 0 until 3) {
@@ -382,7 +392,7 @@ private class GlobePainter(private val dots: EarthDots) {
         // It lands with a little overshoot when a destination is saved.
         val pop = 1f + 1.6f * (1f - save) * (1f - save) * (1f - save)
         drawCircle(color, unit * 8.5f * pop, at, alpha = 0.3f * facing)
-        drawCircle(Color.White, unit * 3.4f * pop, at, alpha = facing)
+        drawCircle(palette.beaconCore, unit * 3.4f * pop, at, alpha = facing)
     }
 
     /** Coordinates not saved yet: a reticle that keeps turning. */
@@ -391,13 +401,13 @@ private class GlobePainter(private val dots: EarthDots) {
         val facing = ((depth - 0.04f) / 0.3f).coerceIn(0f, 1f)
         val unit = 1.dp.toPx()
         val size = unit * 13f
-        drawCircle(Space.Cyan, size, at, alpha = 0.9f * facing, style = Stroke(unit * 1.5f))
-        drawCircle(Space.Cyan, unit * 2.2f, at, alpha = facing)
+        drawCircle(palette.cyan, size, at, alpha = 0.9f * facing, style = Stroke(unit * 1.5f))
+        drawCircle(palette.cyan, unit * 2.2f, at, alpha = facing)
         rotate(degrees = time * 40f, pivot = at) {
             for (k in 0 until 4) {
                 rotate(degrees = k * 90f, pivot = at) {
                     drawLine(
-                        color = Space.Cyan,
+                        color = palette.cyan,
                         start = Offset(at.x, at.y - size - unit * 5f),
                         end = Offset(at.x, at.y - size + unit * 3f),
                         strokeWidth = unit * 1.5f,
@@ -417,7 +427,7 @@ private class GlobePainter(private val dots: EarthDots) {
             val p = ((progress - k * 0.16f) / (1f - k * 0.16f)).coerceIn(0f, 1f)
             if (p <= 0f) continue
             drawCircle(
-                color = lerp(Color.White, Space.Gold, p),
+                color = lerp(palette.wave, palette.beacon, p),
                 radius = unit * 8f + (radius * 1.3f - unit * 8f) * easeOut(p),
                 center = at,
                 alpha = (1f - p) * 0.85f,
@@ -430,7 +440,7 @@ private class GlobePainter(private val dots: EarthDots) {
             val distance = unit * (34f + 26f * ((k * 7) % 5) / 4f) * reach
             val spark = Offset(at.x + cos(angle) * distance, at.y + sin(angle) * distance)
             val fade = 1f - progress
-            val color = if (k % 2 == 0) Space.Gold else Color.White
+            val color = if (k % 2 == 0) palette.beacon else palette.wave
             drawCircle(color, unit * 6f * fade, spark, alpha = 0.3f * fade)
             drawCircle(color, unit * 2.6f * fade, spark, alpha = fade)
         }
@@ -443,7 +453,7 @@ private class GlobePainter(private val dots: EarthDots) {
             val p = ((progress - k * 0.14f) / (1f - k * 0.14f)).coerceIn(0f, 1f)
             if (p <= 0f) continue
             drawCircle(
-                color = lerp(Color.White, glow, p),
+                color = lerp(palette.wave, glow, p),
                 radius = radius * (1.02f + 1.5f * easeOut(p)),
                 center = center,
                 alpha = (1f - p) * (1f - p) * 0.8f,
@@ -461,7 +471,7 @@ private class GlobePainter(private val dots: EarthDots) {
         rotate(degrees = ORBIT_TILT, pivot = center) {
             // Angles grow clockwise from three o'clock: 0..180 is the near half, below the centre.
             drawArc(
-                color = Space.Lavender,
+                color = palette.orbit,
                 startAngle = if (front) 0f else 180f,
                 sweepAngle = 180f,
                 useCenter = false,
@@ -473,8 +483,8 @@ private class GlobePainter(private val dots: EarthDots) {
             val angle = time * 0.8f
             if ((sin(angle) >= 0f) == front) {
                 val at = Offset(center.x + a * cos(angle), center.y + b * sin(angle))
-                drawCircle(Space.Cyan, unit * 5.5f, at, alpha = alpha * 0.3f)
-                drawCircle(Color.White, unit * 2.4f, at, alpha = alpha)
+                drawCircle(palette.satellite, unit * 5.5f, at, alpha = alpha * 0.3f)
+                drawCircle(palette.satelliteCore, unit * 2.4f, at, alpha = alpha)
             }
         }
     }
@@ -484,7 +494,7 @@ private class GlobePainter(private val dots: EarthDots) {
         if (alpha <= 0.01f) return
         val unit = 1.dp.toPx()
         val r = radius + unit * 16f
-        drawCircle(Color.White, r, center, alpha = 0.1f * alpha, style = Stroke(unit * 2f))
+        drawCircle(palette.edge, r, center, alpha = 0.1f * alpha, style = Stroke(unit * 2f))
         if (session == null) return
         val left = (session.endElapsedRealtime - SystemClock.elapsedRealtime()).toFloat() / Session.DURATION_MS
         val fraction = left.coerceIn(0f, 1f)
@@ -502,8 +512,8 @@ private class GlobePainter(private val dots: EarthDots) {
             )
             val tip = 2f * PI.toFloat() * fraction
             val at = Offset(center.x + r * cos(tip), center.y + r * sin(tip))
-            drawCircle(Space.Gold, unit * 7f, at, alpha = 0.35f * alpha)
-            drawCircle(Color.White, unit * 3f, at, alpha = alpha)
+            drawCircle(palette.beacon, unit * 7f, at, alpha = 0.35f * alpha)
+            drawCircle(palette.beaconCore, unit * 3f, at, alpha = alpha)
         }
     }
 

@@ -120,7 +120,7 @@ class MockLocationService : Service() {
 
     /** The widget was tapped while Altrove can't work yet: say why and bring the app up. */
     private fun refuse(message: Int) {
-        Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
+        Toast.makeText(applicationContext, localized().getString(message), Toast.LENGTH_LONG).show()
         try {
             startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: RuntimeException) {

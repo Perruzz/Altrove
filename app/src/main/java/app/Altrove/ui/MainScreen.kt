@@ -41,6 +41,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,6 +61,7 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -93,6 +95,7 @@ import app.altrove.Prefs
 import app.altrove.R
 import app.altrove.Session
 import app.altrove.Setup
+import app.altrove.ThemeMode
 import app.altrove.ui.space.Globe
 import app.altrove.ui.space.SpaceBackground
 import app.altrove.ui.space.SpaceScene
@@ -114,7 +117,7 @@ private data class AreaResult(val key: Pair<List<Coordinates>, Double>?, val gri
  * the destination itself: a point typed in two fields, or an area to draw a point from.
  */
 @Composable
-fun MainScreen() {
+fun MainScreen(themeMode: ThemeMode, onThemeChange: (mode: ThemeMode, origin: Offset, reveal: Boolean) -> Unit) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val haptics = LocalHapticFeedback.current
@@ -123,6 +126,10 @@ fun MainScreen() {
     val widgetPlaced by AltroveWidgetProvider.placed.collectAsStateWithLifecycle()
 
     var isMockApp by remember { mutableStateOf(Setup.isMockLocationApp(context)) }
+    // Saveable: a language change recreates the screen, and the panel should still be open.
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
+    val openSupport: () -> Unit = { runCatching { uriHandler.openUri(BUY_ME_A_COFFEE) } }
     var missingPermissions by remember { mutableStateOf(Setup.missingOptionalPermissions(context)) }
     var permissionsHandled by remember { mutableStateOf(Prefs.optionalPermissionsHandled(context)) }
     var destination by remember { mutableStateOf(Prefs.destination(context)) }
@@ -354,7 +361,11 @@ fun MainScreen() {
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Header(compact = typing, modifier = Modifier.entrance(scene, order = 0))
+                Header(
+                    compact = typing,
+                    onSettings = { settingsOpen = true },
+                    modifier = Modifier.entrance(scene, order = 0),
+                )
 
                 // The canvas is larger than the room it takes: its margin (halo, orbit, ring)
                 // is allowed to overlap what is above and below.
@@ -496,22 +507,21 @@ fun MainScreen() {
                 Text(
                     text = stringResource(R.string.footnote),
                     style = MaterialTheme.typography.bodySmall,
-                    color = Space.Starlight.copy(alpha = 0.5f),
+                    color = Space.Faint,
                     modifier = Modifier
                         .padding(horizontal = 4.dp)
                         .entrance(scene, order = 4),
                 )
 
                 // Opens Buy Me a Coffee in the browser: the app itself still never goes online.
-                val uriHandler = LocalUriHandler.current
                 GhostButton(
-                    onClick = { runCatching { uriHandler.openUri(BUY_ME_A_COFFEE) } },
+                    onClick = openSupport,
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .padding(bottom = 8.dp)
                         .height(46.dp)
                         .entrance(scene, order = 5),
-                    color = Space.Gold,
+                    color = LocalSpace.current.link,
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_coffee),
@@ -523,12 +533,20 @@ fun MainScreen() {
                 }
             }
         }
+
+        SettingsPanel(
+            open = settingsOpen,
+            onClose = { settingsOpen = false },
+            themeMode = themeMode,
+            onThemeChange = onThemeChange,
+            onSupport = openSupport,
+        )
     }
 }
 
 @Composable
-private fun Header(compact: Boolean, modifier: Modifier = Modifier) {
-    Row(modifier = modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun Header(compact: Boolean, onSettings: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
                 .size(44.dp)
@@ -546,13 +564,23 @@ private fun Header(compact: Boolean, modifier: Modifier = Modifier) {
             )
         }
         Spacer(Modifier.width(14.dp))
-        Column {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-            )
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Space.Text,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onSettings, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_settings),
+                        contentDescription = stringResource(R.string.settings_title),
+                        tint = Space.Muted,
+                    )
+                }
+            }
             // Dropped while typing, to leave the room to the globe and the fields.
             AnimatedVisibility(visible = !compact) {
                 Text(
@@ -589,15 +617,17 @@ private fun SetupCard(
 ) {
     val context = LocalContext.current
     val amber = listOf(Space.Amber, Color(0xFFFF9D5C))
+    val palette = LocalSpace.current
     GlassCard(
-        modifier = modifier.animateContentSize(),
+        modifier = modifier,
         accent = Space.Amber,
-        tint = Color(0xFF4A3516),
+        tint = palette.setupTint,
+        animateSize = true,
     ) {
         Text(
             text = stringResource(R.string.setup_title),
             style = MaterialTheme.typography.titleMedium,
-            color = Space.Gold,
+            color = palette.setupTitle,
         )
 
         if (showMockStep) {
@@ -610,7 +640,7 @@ private fun SetupCard(
                 onClick = { Setup.openDeveloperOptions(context) },
                 modifier = Modifier.height(46.dp),
                 colors = amber,
-                contentColor = Space.Night,
+                contentColor = Space.Ink,
             ) {
                 Text(stringResource(R.string.setup_mock_action), fontWeight = FontWeight.SemiBold)
             }
@@ -627,7 +657,7 @@ private fun SetupCard(
                             tag = "about-phone",
                             styles = TextLinkStyles(
                                 SpanStyle(
-                                    color = Space.Gold,
+                                    color = palette.setupTitle,
                                     fontWeight = FontWeight.Medium,
                                     textDecoration = TextDecoration.Underline,
                                 ),
@@ -645,7 +675,7 @@ private fun SetupCard(
         }
 
         if (showMockStep && permissionsPrompt != null) {
-            HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+            HorizontalDivider(color = Space.Edge.copy(alpha = 0.12f))
         }
 
         if (permissionsPrompt != null) {
@@ -659,7 +689,7 @@ private fun SetupCard(
                     onClick = onAllowPermissions,
                     modifier = Modifier.height(46.dp),
                     colors = amber,
-                    contentColor = Space.Night,
+                    contentColor = Space.Ink,
                 ) {
                     Text(stringResource(R.string.setup_permissions_action), fontWeight = FontWeight.SemiBold)
                 }
@@ -680,18 +710,18 @@ private fun DestinationCard(
     area: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    GlassCard(modifier = modifier.animateContentSize()) {
+    GlassCard(modifier = modifier, animateSize = true) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = stringResource(R.string.destination_title),
                 style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
+                color = Space.Text,
                 modifier = Modifier.weight(1f),
             )
             ModeSwitch(
                 options = listOf(stringResource(R.string.mode_point), stringResource(R.string.mode_area)),
                 selected = if (areaMode) 1 else 0,
-                onSelect = { onModeChange(it == 1) },
+                onSelect = { index, _ -> onModeChange(index == 1) },
             )
         }
         AnimatedContent(
@@ -760,7 +790,7 @@ private fun PointEditor(
         modifier = Modifier
             .fillMaxWidth()
             .height(52.dp),
-        colors = if (justSaved) listOf(Color(0xFF3CCB9B), Color(0xFF1FA6B8)) else listOf(Space.Violet, Color(0xFF5546E0)),
+        colors = if (justSaved) listOf(Color(0xFF3CCB9B), Color(0xFF1FA6B8)) else listOf(Space.Violet, Space.VioletDeep),
     ) {
         AnimatedContent(targetState = justSaved, label = "save") { saved ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -791,11 +821,12 @@ private fun SessionCard(
     modifier: Modifier = Modifier,
 ) {
     val active = session != null
-    val accent by animateColorAsState(if (active) Space.Magenta else Color.White, tween(700), label = "accent")
-    val tint by animateColorAsState(if (active) Color(0xFF6A1D6E) else Space.Panel, tween(700), label = "tint")
+    val palette = LocalSpace.current
+    val accent by animateColorAsState(if (active) palette.magenta else palette.panelEdge, tween(700), label = "accent")
+    val tint by animateColorAsState(if (active) palette.activeTint else palette.panel, tween(700), label = "tint")
 
     // The size animation clips to the card, not to the row: the glow of the button needs room.
-    GlassCard(modifier = modifier.animateContentSize(), accent = accent, tint = tint) {
+    GlassCard(modifier = modifier, accent = accent, tint = tint, animateSize = true) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -803,13 +834,13 @@ private fun SessionCard(
                         if (active) R.string.status_active_title else R.string.status_idle_title,
                     ),
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
+                    color = Space.Text,
                 )
                 if (session != null) {
                     RollingCountdown(
                         seconds = secondsLeft(session),
                         style = MaterialTheme.typography.displaySmall.copy(
-                            color = Color.White,
+                            color = Space.Text,
                             fontFeatureSettings = "tnum",
                             fontWeight = FontWeight.Medium,
                         ),
@@ -835,7 +866,7 @@ private fun SessionCard(
             }
             Spacer(Modifier.width(16.dp))
             if (active) {
-                GhostButton(onClick = onStop, modifier = Modifier.height(48.dp), color = Color.White) {
+                GhostButton(onClick = onStop, modifier = Modifier.height(48.dp), color = Space.Text) {
                     Text(stringResource(R.string.stop), fontWeight = FontWeight.SemiBold)
                 }
             } else {
@@ -844,7 +875,7 @@ private fun SessionCard(
                     modifier = Modifier.height(48.dp),
                     enabled = isMockApp && destination != null,
                     colors = listOf(Space.Cyan, Color(0xFF7C8CFF)),
-                    contentColor = Space.Night,
+                    contentColor = Space.Ink,
                 ) {
                     Text(stringResource(R.string.start), fontWeight = FontWeight.SemiBold)
                 }

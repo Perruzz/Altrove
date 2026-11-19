@@ -45,6 +45,17 @@
 
     <string name="support_coffee">Buy me a coffee</string>
 
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_close">Close</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="settings_support">Altrove is free and open source. If it is useful to you, you can buy me a coffee.</string>
+    <string name="settings_version">Altrove %1$s · MIT license</string>
+
     <!-- One-time setup -->
     <string name="setup_title">One-time setup</string>
     <string name="setup_mock_body">Android only lets the app picked as “mock location app” move the device position. Open Developer options and select Altrove.</string>

@@ -237,7 +237,7 @@ private fun AreaSummaryText(summary: AreaSummary, modifier: Modifier = Modifier)
                         number,
                     ),
                     style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
-                    color = Color.White,
+                    color = Space.Text,
                 )
                 Text(
                     text = stringResource(R.string.area_spacing_note, DecimalFormat("0.##").format(state.spacingMeters)),

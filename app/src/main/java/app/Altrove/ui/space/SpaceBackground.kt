@@ -11,33 +11,33 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.dp
-import app.altrove.ui.Space
+import app.altrove.ui.LocalSpace
+import app.altrove.ui.SpacePalette
 import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.sin
 
-private val StarWhite = Color(0xFFF3F0FF)
-private val StarViolet = Color(0xFFC6BDFF)
-private val StarWarm = Color(0xFFFFE1B0)
-
 /**
  * The sky behind everything: a deep gradient, three slow nebulae, the starfield and, now and
- * then, a shooting star. The nebulae warm up while a session is active.
+ * then, a shooting star. The nebulae warm up while a session is active. The colours come from
+ * the theme: the night sky, or white space.
  *
  * @param active 0 at rest, 1 while "elsewhere"; read while drawing.
  */
 @Composable
 internal fun SpaceBackground(scene: SpaceScene, active: () -> Float, modifier: Modifier = Modifier) {
+    val palette = LocalSpace.current
     Spacer(
         modifier.drawWithCache {
             val w = size.width
             val h = size.height
-            // Gradients are built once per size; per frame only their opacity changes.
-            val sky = Brush.verticalGradient(listOf(Space.Dusk, Space.Night, Space.Void))
+            // Gradients are built once per size and theme; per frame only their opacity changes.
+            val sky = Brush.verticalGradient(listOf(palette.skyTop, palette.skyMiddle, palette.skyBottom))
+            val strength = palette.nebulaStrength
             val nebulae = listOf(
-                Nebula(Offset(w * 0.10f, h * 0.15f), w * 1.0f, Color(0xFF5B3DF5), Color(0xFFC2318B), 0.30f),
-                Nebula(Offset(w * 1.02f, h * 0.48f), w * 0.9f, Color(0xFF0FA5C4), Color(0xFFFF8A4C), 0.15f),
-                Nebula(Offset(w * 0.22f, h * 1.02f), w * 0.95f, Color(0xFFB8328F), Color(0xFF6C4DFF), 0.14f),
+                Nebula(Offset(w * 0.10f, h * 0.15f), w * 1.0f, palette.nebulaCool[0], palette.nebulaWarm[0], 0.30f * strength),
+                Nebula(Offset(w * 1.02f, h * 0.48f), w * 0.9f, palette.nebulaCool[1], palette.nebulaWarm[1], 0.15f * strength),
+                Nebula(Offset(w * 0.22f, h * 1.02f), w * 0.95f, palette.nebulaCool[2], palette.nebulaWarm[2], 0.14f * strength),
             )
             onDrawBehind {
                 val time = scene.time
@@ -48,10 +48,10 @@ internal fun SpaceBackground(scene: SpaceScene, active: () -> Float, modifier: M
                     drawCircle(nebula.cool, nebula.radius, nebula.center, alpha = nebula.strength * breath * (1f - warmth))
                     drawCircle(nebula.warm, nebula.radius, nebula.center, alpha = nebula.strength * breath * warmth)
                 }
-                drawStars(scene, time)
-                drawMeteor(scene, time)
+                drawStars(scene, time, palette)
+                drawMeteor(scene, time, palette)
                 val flash = scene.flash.value
-                if (flash > 0f) drawRect(Color.White, alpha = flash * 0.32f)
+                if (flash > 0f) drawRect(palette.flash, alpha = flash * palette.flashStrength)
             }
         },
     )
@@ -63,7 +63,7 @@ private class Nebula(val center: Offset, val radius: Float, cool: Color, warm: C
     val warm = Brush.radialGradient(listOf(warm, Color.Transparent), center, radius)
 }
 
-private fun DrawScope.drawStars(scene: SpaceScene, time: Float) {
+private fun DrawScope.drawStars(scene: SpaceScene, time: Float, palette: SpacePalette) {
     val stars = scene.stars
     val focal = max(size.width, size.height) * 0.55f
     val origin = if (scene.vanishingPoint.isSpecified) {
@@ -87,12 +87,12 @@ private fun DrawScope.drawStars(scene: SpaceScene, time: Float) {
         val px = origin.x + stars.x[i] / depth * focal
         val py = origin.y + stars.y[i] / depth * focal
         val twinkle = if (scene.calm) 0.85f else 0.72f + 0.28f * sin(time * (1.2f + (i % 7) * 0.23f) + stars.phase[i])
-        val alpha = (stars.age[i] / fadeIn).coerceAtMost(1f) * twinkle
+        val alpha = (stars.age[i] / fadeIn).coerceAtMost(1f) * twinkle * palette.starStrength
         val radius = stars.magnitude[i] * unit * (0.5f + 0.9f * (1f - depth))
         val color = when (stars.tint[i]) {
-            Starfield.TINT_VIOLET -> StarViolet
-            Starfield.TINT_WARM -> StarWarm
-            else -> StarWhite
+            Starfield.TINT_VIOLET -> palette.stars[1]
+            Starfield.TINT_WARM -> palette.stars[2]
+            else -> palette.stars[0]
         }
         // Where the star was a moment ago: at speed, the gap is the streak.
         val before = depth + speed * STREAK_SECONDS
@@ -117,7 +117,7 @@ private fun DrawScope.drawStars(scene: SpaceScene, time: Float) {
     }
 }
 
-private fun DrawScope.drawMeteor(scene: SpaceScene, time: Float) {
+private fun DrawScope.drawMeteor(scene: SpaceScene, time: Float, palette: SpacePalette) {
     val meteor = scene.meteor
     val progress = (time - meteor.startedAt) / Meteor.DURATION
     if (progress < 0f || progress > 1f) return
@@ -130,14 +130,14 @@ private fun DrawScope.drawMeteor(scene: SpaceScene, time: Float) {
     val length = size.width * 0.2f * glow
     val tail = Offset(head.x - meteor.heading * length, head.y - meteor.slope * length)
     drawLine(
-        brush = Brush.linearGradient(listOf(Color.Transparent, StarWhite), start = tail, end = head),
+        brush = Brush.linearGradient(listOf(Color.Transparent, palette.meteor), start = tail, end = head),
         start = tail,
         end = head,
         strokeWidth = 1.6.dp.toPx(),
         cap = StrokeCap.Round,
         alpha = glow,
     )
-    drawCircle(StarWhite, 1.6.dp.toPx(), head, alpha = glow)
+    drawCircle(palette.meteor, 1.6.dp.toPx(), head, alpha = glow)
 }
 
 private const val STREAK_SECONDS = 0.05f

@@ -12,6 +12,7 @@ object Prefs {
     private const val KEY_SESSION_RUNNING = "session_running"
     private const val KEY_OPTIONAL_PERMISSIONS_HANDLED = "optional_permissions_handled"
     private const val KEY_AREA_MODE = "area_mode"
+    private const val KEY_THEME = "theme"
     private const val KEY_AREA_CORNERS = "area_corners"
     private const val KEY_AREA_SPACING = "area_spacing"
 
@@ -53,6 +54,15 @@ object Prefs {
 
     fun setOptionalPermissionsHandled(context: Context) {
         prefs(context).edit { putBoolean(KEY_OPTIONAL_PERMISSIONS_HANDLED, true) }
+    }
+
+    /** The theme chosen in the settings: the phone's by default. */
+    fun theme(context: Context): ThemeMode =
+        runCatching { ThemeMode.valueOf(prefs(context).getString(KEY_THEME, null) ?: ThemeMode.SYSTEM.name) }
+            .getOrDefault(ThemeMode.SYSTEM)
+
+    fun setTheme(context: Context, mode: ThemeMode) {
+        prefs(context).edit { putString(KEY_THEME, mode.name) }
     }
 
     /** True when the destination is drawn at random from an area rather than typed. */

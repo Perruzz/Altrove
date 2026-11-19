@@ -7,4 +7,14 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowSplashScreenBackground">@color/space_background</item>
     </style>
+
+    <style name="Theme.Altrove.Day" parent="Theme.Altrove">
+        <item name="android:windowBackground">@color/space_day</item>
+        <item name="android:windowSplashScreenBackground">@color/space_day</item>
+    </style>
+
+    <style name="Theme.Altrove.Night" parent="Theme.Altrove">
+        <item name="android:windowBackground">@color/space_night</item>
+        <item name="android:windowSplashScreenBackground">@color/space_night</item>
+    </style>
 </resources>

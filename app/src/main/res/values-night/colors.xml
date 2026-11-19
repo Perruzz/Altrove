@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window and splash background with a dark phone: the night sky. -->
+    <color name="space_background">#070718</color>
+</resources>

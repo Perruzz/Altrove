@@ -15,9 +15,10 @@ object SessionNotification {
     private const val CHANNEL = "session"
 
     fun ensureChannel(context: Context) {
+        val localized = context.localized()
         val channel = NotificationChannelCompat.Builder(CHANNEL, NotificationManagerCompat.IMPORTANCE_LOW)
-            .setName(context.getString(R.string.notification_channel))
-            .setDescription(context.getString(R.string.notification_channel_description))
+            .setName(localized.getString(R.string.notification_channel))
+            .setDescription(localized.getString(R.string.notification_channel_description))
             .setShowBadge(false)
             .build()
         NotificationManagerCompat.from(context).createNotificationChannel(channel)
@@ -33,6 +34,7 @@ object SessionNotification {
         endElapsedRealtime: Long,
         immediate: Boolean = true,
     ): Notification {
+        val localized = context.localized()
         val remaining = endElapsedRealtime - SystemClock.elapsedRealtime()
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val openApp = PendingIntent.getActivity(
@@ -43,12 +45,12 @@ object SessionNotification {
         )
         return NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_pin)
-            .setContentTitle(context.getString(R.string.notification_title))
+            .setContentTitle(localized.getString(R.string.notification_title))
             .setContentText(
-                destination?.let { context.getString(R.string.notification_text, it.format(4)) },
+                destination?.let { localized.getString(R.string.notification_text, it.format(4)) },
             )
             .setContentIntent(openApp)
-            .addAction(R.drawable.ic_stop, context.getString(R.string.stop), stop)
+            .addAction(R.drawable.ic_stop, localized.getString(R.string.stop), stop)
             // A system-drawn countdown: no need to repost the notification every second.
             .setWhen(System.currentTimeMillis() + remaining)
             .setShowWhen(true)

@@ -1,6 +1,7 @@
 package app.altrove.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -44,16 +45,21 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -74,20 +80,40 @@ private val FieldShape = RoundedCornerShape(18.dp)
  *
  * @param accent colour of the lit edge.
  * @param tint colour of the pane itself.
+ * @param opaque for a pane floating over the screen, which must hide what is underneath.
+ * @param animateSize animates changes of height. Done here rather than by the caller, so that
+ *   the size animation (which clips) sits inside the shadow and doesn't cut it.
  */
 @Composable
 internal fun GlassCard(
     modifier: Modifier = Modifier,
-    accent: Color = Color.White,
+    accent: Color = LocalSpace.current.panelEdge,
     tint: Color = Space.Panel,
+    opaque: Boolean = false,
+    animateSize: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val palette = LocalSpace.current
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .then(
+                if (palette.dark) {
+                    Modifier
+                } else {
+                    // On the white sky a glass pane needs a shadow to stand out.
+                    Modifier.shadow(14.dp, CardShape, clip = false, ambientColor = palette.violet, spotColor = palette.violet)
+                },
+            )
+            .then(if (animateSize) Modifier.animateContentSize() else Modifier)
             .background(
                 // Opaque enough that stars never sparkle behind text, sheer enough to show the sky.
-                Brush.verticalGradient(listOf(tint.copy(alpha = 0.8f), Space.Dusk.copy(alpha = 0.9f))),
+                Brush.verticalGradient(
+                    listOf(
+                        tint.copy(alpha = if (opaque) 0.97f else palette.panelOpacity - 0.05f),
+                        palette.panelBottom.copy(alpha = if (opaque) 0.99f else palette.panelOpacity + 0.05f),
+                    ),
+                ),
                 CardShape,
             )
             .border(
@@ -109,7 +135,7 @@ internal fun GlowButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    colors: List<Color> = listOf(Space.Violet, Color(0xFF5546E0)),
+    colors: List<Color> = listOf(Space.Violet, Space.VioletDeep),
     contentColor: Color = Color.White,
     content: @Composable RowScope.() -> Unit,
 ) {
@@ -137,7 +163,7 @@ internal fun GlowButton(
                 },
             )
             .background(
-                if (enabled) Brush.horizontalGradient(colors) else SolidColor(Color.White.copy(alpha = 0.08f)),
+                if (enabled) Brush.horizontalGradient(colors) else SolidColor(Space.Edge.copy(alpha = 0.08f)),
                 CircleShape,
             ),
         enabled = enabled,
@@ -146,7 +172,7 @@ internal fun GlowButton(
             containerColor = Color.Transparent,
             contentColor = contentColor,
             disabledContainerColor = Color.Transparent,
-            disabledContentColor = Color.White.copy(alpha = 0.38f),
+            disabledContentColor = Space.Edge.copy(alpha = 0.38f),
         ),
         contentPadding = PaddingValues(horizontal = 24.dp),
         interactionSource = interaction,
@@ -169,10 +195,10 @@ internal fun GhostButton(
         enabled = enabled,
         shape = CircleShape,
         colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = Color.White.copy(alpha = 0.06f),
+            containerColor = Space.Edge.copy(alpha = 0.06f),
             contentColor = color,
             disabledContainerColor = Color.Transparent,
-            disabledContentColor = Color.White.copy(alpha = 0.3f),
+            disabledContentColor = Space.Edge.copy(alpha = 0.3f),
         ),
         border = BorderStroke(1.dp, color.copy(alpha = 0.34f)),
         contentPadding = PaddingValues(horizontal = 22.dp),
@@ -242,15 +268,15 @@ internal fun CoordinateField(
 /** Text fields on the glass: a faint fill, and cyan while typing. */
 @Composable
 internal fun spaceFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = Color.White,
+    focusedTextColor = Space.Text,
     unfocusedTextColor = Space.Starlight,
     errorTextColor = Space.Starlight,
-    focusedContainerColor = Color.White.copy(alpha = 0.07f),
-    unfocusedContainerColor = Color.White.copy(alpha = 0.04f),
+    focusedContainerColor = Space.Edge.copy(alpha = 0.07f),
+    unfocusedContainerColor = Space.Edge.copy(alpha = 0.04f),
     errorContainerColor = Space.Danger.copy(alpha = 0.07f),
     cursorColor = Space.Cyan,
     focusedBorderColor = Space.Cyan,
-    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+    unfocusedBorderColor = Space.Edge.copy(alpha = 0.2f),
     focusedLabelColor = Space.Cyan,
     unfocusedLabelColor = Space.Muted,
     focusedSuffixColor = Space.Muted,
@@ -263,15 +289,19 @@ internal fun spaceFieldColors() = OutlinedTextFieldDefaults.colors(
 
 /**
  * Two or more choices side by side, with a glowing pill sliding under the chosen one.
+ *
+ * [onSelect] also gets the centre of the tapped choice, in root coordinates: the theme switch
+ * starts its circular reveal from there.
  */
 @Composable
 internal fun ModeSwitch(
     options: List<String>,
     selected: Int,
-    onSelect: (Int) -> Unit,
+    onSelect: (index: Int, origin: Offset) -> Unit,
     modifier: Modifier = Modifier,
     segment: Dp = 76.dp,
 ) {
+    var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val offset by animateDpAsState(
         targetValue = segment * selected,
         animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f),
@@ -281,8 +311,9 @@ internal fun ModeSwitch(
         modifier = modifier
             .height(38.dp)
             .width(segment * options.size)
-            .background(Color.White.copy(alpha = 0.06f), CircleShape)
-            .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape),
+            .background(Space.Edge.copy(alpha = 0.06f), CircleShape)
+            .border(1.dp, Space.Edge.copy(alpha = 0.14f), CircleShape)
+            .onGloballyPositioned { coordinates = it },
     ) {
         Box(
             modifier = Modifier
@@ -292,7 +323,7 @@ internal fun ModeSwitch(
                 .fillMaxHeight()
                 .padding(3.dp)
                 .shadow(10.dp, CircleShape, clip = false, ambientColor = Space.Violet, spotColor = Space.Violet)
-                .background(Brush.horizontalGradient(listOf(Space.Violet, Color(0xFF5546E0))), CircleShape),
+                .background(Brush.horizontalGradient(listOf(Space.Violet, Space.VioletDeep)), CircleShape),
         )
         Row(modifier = Modifier.selectableGroup()) {
             options.forEachIndexed { index, label ->
@@ -303,7 +334,20 @@ internal fun ModeSwitch(
                         .width(segment)
                         .fillMaxHeight()
                         .clip(CircleShape)
-                        .selectable(selected = chosen, role = Role.Tab, onClick = { onSelect(index) }),
+                        .selectable(
+                            selected = chosen,
+                            role = Role.Tab,
+                            onClick = {
+                                val box = coordinates
+                                val origin = if (box == null || !box.isAttached) {
+                                    Offset.Unspecified
+                                } else {
+                                    val width = box.size.width.toFloat() / options.size
+                                    box.localToRoot(Offset(width * (index + 0.5f), box.size.height / 2f))
+                                }
+                                onSelect(index, origin)
+                            },
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(text = label, style = MaterialTheme.typography.labelLarge, color = color)
